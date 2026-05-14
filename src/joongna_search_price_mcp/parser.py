@@ -8,6 +8,7 @@ from collections.abc import Iterable
 from joongna_search_price_mcp.models import (
     DailyAveragePoint,
     HourlyScatterPoint,
+    JoongnaSearchKeywordResult,
     JoongnaSearchPriceResult,
     Listing,
     PriceHistoryDataset,
@@ -208,6 +209,7 @@ def _build_listing(item: dict) -> Listing:
         wish_count=int(item["wishCount"]) if item.get("wishCount") is not None else None,
         pickup_badge=bool(item["pickupBadgeFlag"]) if item.get("pickupBadgeFlag") is not None else None,
         certified_seller=bool(item["certifySellerFlag"]) if item.get("certifySellerFlag") is not None else None,
+        state=int(item["state"]) if item.get("state") is not None else None,
     )
 
 
@@ -256,6 +258,53 @@ def _summary_is_empty(summary: PriceSummary) -> bool:
         summary.average_price_krw is None
         and summary.highest_price_krw is None
         and summary.lowest_price_krw is None
+    )
+
+
+def _iter_search_items(html: str) -> list[dict]:
+    for match in _NEXT_FLIGHT_RE.finditer(html):
+        encoded = match.group(1)
+        decoded = json.loads(f'"{encoded}"')
+        if ":" not in decoded:
+            continue
+
+        _, payload = decoded.split(":", 1)
+        try:
+            root = json.loads(payload)
+        except json.JSONDecodeError:
+            continue
+
+        stack: list[object] = [root]
+        while stack:
+            node = stack.pop()
+            if isinstance(node, dict):
+                items = node.get("items")
+                if isinstance(items, list) and items and isinstance(items[0], dict) and "seq" in items[0]:
+                    return items
+                stack.extend(node.values())
+            elif isinstance(node, list):
+                stack.extend(node)
+    return []
+
+
+def parse_search_keyword_page(
+    html: str,
+    *,
+    query: str,
+    search_word: str,
+    source_url: str,
+    fetched_at: str,
+) -> JoongnaSearchKeywordResult:
+    items = _iter_search_items(html)
+    listings = [_build_listing(item) for item in items if item.get("seq") is not None]
+
+    return JoongnaSearchKeywordResult(
+        query=query,
+        search_word=search_word,
+        source_url=source_url,
+        fetched_at=fetched_at,
+        total_count=len(listings),
+        listings=listings,
     )
 
 

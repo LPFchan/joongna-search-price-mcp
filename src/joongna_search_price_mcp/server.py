@@ -14,7 +14,7 @@ import uvicorn
 
 from joongna_search_price_mcp.client import DEFAULT_USER_AGENT, JoongnaClient
 from joongna_search_price_mcp.service import JoongnaPriceService
-from joongna_search_price_mcp.models import JoongnaSearchPriceResult
+from joongna_search_price_mcp.models import JoongnaSearchKeywordResult, JoongnaSearchPriceResult
 
 
 _service: JoongnaPriceService | None = None
@@ -163,6 +163,38 @@ async def joongna_search_price(
     )
 
 
+@mcp.tool()
+async def joongna_search_keyword(
+    query: Annotated[
+        str,
+        Field(description="Product name to search for on Joongna"),
+    ],
+    search_word: Annotated[
+        str | None,
+        Field(
+            default=None,
+            description="Optional explicit Joongna search term override, ideally in Korean",
+        ),
+    ] = None,
+    max_listings: Annotated[
+        int,
+        Field(default=20, ge=1, le=100, description="Maximum listings to return"),
+    ] = 20,
+    force_refresh: Annotated[
+        bool,
+        Field(default=False, description="Bypass the in-memory cache for this request"),
+    ] = False,
+) -> JoongnaSearchKeywordResult:
+    """Search Joongna for product listings, including sold-out items, and return listing data."""
+    service = _require_service()
+    return await service.search_keyword(
+        query=query,
+        search_word=search_word,
+        max_listings=max_listings,
+        force_refresh=force_refresh,
+    )
+
+
 def _require_service() -> JoongnaPriceService:
     if _service is None:
         raise RuntimeError("Joongna price service is not ready")
@@ -175,7 +207,7 @@ async def index(_: object) -> JSONResponse:
             "name": "joongna-search-price-mcp",
             "mcp_path": "/mcp",
             "healthz": "/healthz",
-            "tool": "joongna_search_price",
+            "tools": ["joongna_search_price", "joongna_search_keyword"],
         }
     )
 

@@ -43,6 +43,7 @@ class Listing(BaseModel):
     wish_count: int | None = None
     pickup_badge: bool | None = None
     certified_seller: bool | None = None
+    state: int | None = None
 
 
 class SearchMetadata(BaseModel):
@@ -62,6 +63,18 @@ class PriceHistoryDataset(BaseModel):
     listing_count: int
     daily_average_prices: list[DailyAveragePoint] = Field(default_factory=list)
     hourly_scatter_points: list[HourlyScatterPoint] = Field(default_factory=list)
+    listings: list[Listing] = Field(default_factory=list)
+
+
+class JoongnaSearchKeywordResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    query: str
+    search_word: str
+    source_url: str
+    fetched_at: str
+    from_cache: bool = False
+    total_count: int = 0
     listings: list[Listing] = Field(default_factory=list)
 
 
