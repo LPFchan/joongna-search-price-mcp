@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import contextlib
+import json
 import os
 from typing import Annotated
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
@@ -58,6 +59,42 @@ def _build_transport_security() -> TransportSecuritySettings:
         allowed_hosts=_dedupe(allowed_hosts),
         allowed_origins=_dedupe(allowed_origins),
     )
+
+
+class _AuthMiddleware:
+    def __init__(self, app, token: str | None):
+        self.app = app
+        self.token = token
+
+    async def __call__(self, scope, receive, send):
+        if self.token is None:
+            await self.app(scope, receive, send)
+            return
+
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        path = scope.get("path", "")
+        if path == "/healthz":
+            await self.app(scope, receive, send)
+            return
+
+        headers = dict(scope.get("headers", []))
+        auth_header = headers.get(b"authorization", b"").decode()
+
+        if auth_header.startswith("Bearer ") and auth_header[7:] == self.token:
+            await self.app(scope, receive, send)
+            return
+
+        token_values = parse_qs(scope.get("query_string", b"").decode()).get("token", [])
+        if self.token in token_values:
+            await self.app(scope, receive, send)
+            return
+
+        body = json.dumps({"error": "Unauthorized"}).encode()
+        await send({"type": "http.response.start", "status": 401, "headers": [(b"content-type", b"application/json")]})
+        await send({"type": "http.response.body", "body": body})
 
 
 @contextlib.asynccontextmanager
@@ -159,7 +196,10 @@ async def health_route(request):
     return await healthz(None)
 
 
-app = mcp.streamable_http_app()
+app = _AuthMiddleware(
+    mcp.streamable_http_app(),
+    os.environ.get("JOONGNA_AUTH_TOKEN"),
+)
 
 
 def main() -> None:
