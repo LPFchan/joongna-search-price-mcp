@@ -73,6 +73,44 @@ Environment variables:
 - `JOONGNA_TIMEOUT_SECONDS` - default `20`
 - `JOONGNA_CACHE_TTL_SECONDS` - default `300`
 - `JOONGNA_USER_AGENT` - optional browser-like user agent override
+- `JOONGNA_PUBLIC_BASE_URL` - public HTTPS URL for this MCP server, for example `https://joongna.lost.plus`
+- `JOONGNA_ALLOWED_HOSTS` - optional comma-separated extra allowed Host headers for MCP transport security
+- `JOONGNA_ALLOWED_ORIGINS` - optional comma-separated extra allowed Origin values for MCP transport security
+
+`JOONGNA_PUBLIC_BASE_URL` is the easiest way to make FastMCP accept your public hostname when the app sits behind `cloudflared`, nginx, or another reverse proxy.
+
+## Cloudflared
+
+Recommended deployment pattern:
+
+- run this app container on the OCI host
+- run `cloudflared` separately, not inside this app container
+- point the tunnel hostname at the local app port
+
+Example tunnel config:
+
+```yaml
+tunnel: <tunnel-id>
+credentials-file: /etc/cloudflared/<tunnel-id>.json
+
+ingress:
+  - hostname: joongna.lost.plus
+    service: http://127.0.0.1:8000
+  - service: http_status:404
+```
+
+Set the app environment so MCP Host header validation accepts the tunneled hostname:
+
+```bash
+export JOONGNA_PUBLIC_BASE_URL="https://joongna.lost.plus"
+```
+
+If you prefer explicit overrides instead of `JOONGNA_PUBLIC_BASE_URL`:
+
+```bash
+export JOONGNA_ALLOWED_HOSTS="joongna.lost.plus"
+export JOONGNA_ALLOWED_ORIGINS="https://joongna.lost.plus"
+```
 
 ## Deployment Notes
 
