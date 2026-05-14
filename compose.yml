@@ -1,0 +1,9 @@
+services:
+  joongna-search-price-mcp:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8000
+      JOONGNA_CACHE_TTL_SECONDS: 300
