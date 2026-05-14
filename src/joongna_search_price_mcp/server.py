@@ -62,12 +62,12 @@ def _build_transport_security() -> TransportSecuritySettings:
 
 
 class _AuthMiddleware:
-    def __init__(self, app, token: str | None):
+    def __init__(self, app, tokens: list[str] | None):
         self.app = app
-        self.token = token
+        self.tokens = set(tokens) if tokens else None
 
     async def __call__(self, scope, receive, send):
-        if self.token is None:
+        if self.tokens is None:
             await self.app(scope, receive, send)
             return
 
@@ -83,12 +83,12 @@ class _AuthMiddleware:
         headers = dict(scope.get("headers", []))
         auth_header = headers.get(b"authorization", b"").decode()
 
-        if auth_header.startswith("Bearer ") and auth_header[7:] == self.token:
+        if auth_header.startswith("Bearer ") and auth_header[7:] in self.tokens:
             await self.app(scope, receive, send)
             return
 
         token_values = parse_qs(scope.get("query_string", b"").decode()).get("token", [])
-        if self.token in token_values:
+        if self.tokens & set(token_values):
             await self.app(scope, receive, send)
             return
 
@@ -196,9 +196,14 @@ async def health_route(request):
     return await healthz(None)
 
 
+_raw_tokens = os.environ.get("JOONGNA_AUTH_TOKEN")
+_auth_tokens: list[str] | None = None
+if _raw_tokens:
+    _auth_tokens = [t.strip() for t in _raw_tokens.split(",") if t.strip()]
+
 app = _AuthMiddleware(
     mcp.streamable_http_app(),
-    os.environ.get("JOONGNA_AUTH_TOKEN"),
+    _auth_tokens,
 )
 
 
