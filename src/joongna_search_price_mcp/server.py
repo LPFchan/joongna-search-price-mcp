@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import fnmatch
 import json
 import os
 from typing import Annotated
@@ -64,9 +65,18 @@ def _build_transport_security() -> TransportSecuritySettings:
 class _CORSMiddleware:
     def __init__(self, app):
         self.app = app
-        self.allowed_origin = os.environ.get("ALLOWED_ORIGIN", "https://chat.lost.plus")
+        raw = os.environ.get("ALLOWED_ORIGINS", os.environ.get("ALLOWED_ORIGIN", "https://chat.lost.plus"))
+        self.allowed_origins = [o.strip() for o in raw.split(",") if o.strip()]
         self.cors_methods = b"GET, POST, DELETE, OPTIONS"
         self.cors_headers = b"Authorization, Content-Type, Accept, Mcp-Session-Id, Mcp-Protocol-Version, Last-Event-ID"
+
+    def _match_origin(self, origin: str | None) -> str | None:
+        if not origin:
+            return None
+        for pattern in self.allowed_origins:
+            if fnmatch.fnmatch(origin, pattern):
+                return origin
+        return None
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
@@ -75,15 +85,17 @@ class _CORSMiddleware:
 
         headers = dict(scope.get("headers", []))
         origin = headers.get(b"origin")
+        matched = self._match_origin(origin.decode() if origin else None)
 
         if scope["method"] == "OPTIONS":
             resp_headers = [
-                (b"access-control-allow-origin", self.allowed_origin.encode()),
                 (b"access-control-allow-methods", self.cors_methods),
                 (b"access-control-allow-headers", self.cors_headers),
                 (b"access-control-max-age", b"86400"),
                 (b"access-control-expose-headers", b"Mcp-Session-Id"),
             ]
+            if matched:
+                resp_headers.insert(0, (b"access-control-allow-origin", matched.encode()))
             await send({"type": "http.response.start", "status": 204, "headers": resp_headers})
             await send({"type": "http.response.body", "body": b""})
             return
@@ -91,8 +103,8 @@ class _CORSMiddleware:
         async def send_with_cors(message):
             if message["type"] == "http.response.start":
                 hlist = list(message.get("headers", []))
-                if origin:
-                    hlist.append((b"access-control-allow-origin", self.allowed_origin.encode()))
+                if matched:
+                    hlist.append((b"access-control-allow-origin", matched.encode()))
                 hlist.append((b"access-control-expose-headers", b"Mcp-Session-Id"))
                 message["headers"] = hlist
             await send(message)
