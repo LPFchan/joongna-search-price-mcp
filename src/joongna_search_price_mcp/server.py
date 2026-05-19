@@ -61,6 +61,45 @@ def _build_transport_security() -> TransportSecuritySettings:
     )
 
 
+class _CORSMiddleware:
+    def __init__(self, app):
+        self.app = app
+        self.allowed_origin = os.environ.get("ALLOWED_ORIGIN", "https://chat.lost.plus")
+        self.cors_methods = b"GET, POST, DELETE, OPTIONS"
+        self.cors_headers = b"Authorization, Content-Type, Accept, Mcp-Session-Id, Mcp-Protocol-Version, Last-Event-ID"
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        headers = dict(scope.get("headers", []))
+        origin = headers.get(b"origin")
+
+        if scope["method"] == "OPTIONS":
+            resp_headers = [
+                (b"access-control-allow-origin", self.allowed_origin.encode()),
+                (b"access-control-allow-methods", self.cors_methods),
+                (b"access-control-allow-headers", self.cors_headers),
+                (b"access-control-max-age", b"86400"),
+                (b"access-control-expose-headers", b"Mcp-Session-Id"),
+            ]
+            await send({"type": "http.response.start", "status": 204, "headers": resp_headers})
+            await send({"type": "http.response.body", "body": b""})
+            return
+
+        async def send_with_cors(message):
+            if message["type"] == "http.response.start":
+                hlist = list(message.get("headers", []))
+                if origin:
+                    hlist.append((b"access-control-allow-origin", self.allowed_origin.encode()))
+                hlist.append((b"access-control-expose-headers", b"Mcp-Session-Id"))
+                message["headers"] = hlist
+            await send(message)
+
+        await self.app(scope, receive, send_with_cors)
+
+
 class _AuthMiddleware:
     def __init__(self, app, tokens: list[str] | None):
         self.app = app
@@ -233,9 +272,11 @@ _auth_tokens: list[str] | None = None
 if _raw_tokens:
     _auth_tokens = [t.strip() for t in _raw_tokens.split(",") if t.strip()]
 
-app = _AuthMiddleware(
-    mcp.streamable_http_app(),
-    _auth_tokens,
+app = _CORSMiddleware(
+    _AuthMiddleware(
+        mcp.streamable_http_app(),
+        _auth_tokens,
+    )
 )
 
 
