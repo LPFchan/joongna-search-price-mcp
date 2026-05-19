@@ -5,7 +5,7 @@ import fnmatch
 import json
 import os
 from typing import Annotated
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs
 
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
@@ -21,44 +21,10 @@ from joongna_search_price_mcp.models import JoongnaSearchKeywordResult, JoongnaS
 _service: JoongnaPriceService | None = None
 
 
-def _split_csv_env(value: str | None) -> list[str]:
-    if not value:
-        return []
-    return [item.strip() for item in value.split(",") if item.strip()]
-
-
-def _dedupe(values: list[str]) -> list[str]:
-    return list(dict.fromkeys(values))
-
 
 def _build_transport_security() -> TransportSecuritySettings:
-    allowed_hosts = ["127.0.0.1:*", "localhost:*", "[::1]:*"]
-    allowed_origins = [
-        "http://127.0.0.1:*",
-        "http://localhost:*",
-        "http://[::1]:*",
-        "https://127.0.0.1:*",
-        "https://localhost:*",
-        "https://[::1]:*",
-    ]
-
-    public_base_url = os.environ.get("JOONGNA_PUBLIC_BASE_URL")
-    if public_base_url:
-        parsed = urlparse(public_base_url)
-        if parsed.scheme and parsed.netloc:
-            allowed_origins.append(f"{parsed.scheme}://{parsed.netloc}")
-            if parsed.hostname:
-                allowed_hosts.append(parsed.netloc)
-                if parsed.port is None:
-                    allowed_hosts.append(parsed.hostname)
-
-    allowed_hosts.extend(_split_csv_env(os.environ.get("JOONGNA_ALLOWED_HOSTS")))
-    allowed_origins.extend(_split_csv_env(os.environ.get("JOONGNA_ALLOWED_ORIGINS")))
-
     return TransportSecuritySettings(
-        enable_dns_rebinding_protection=True,
-        allowed_hosts=_dedupe(allowed_hosts),
-        allowed_origins=_dedupe(allowed_origins),
+        enable_dns_rebinding_protection=False,
     )
 
 
