@@ -116,6 +116,12 @@ class _AuthMiddleware:
             await self.app(scope, receive, send)
             return
 
+        first_segment = path.strip("/").split("/")[0] if path.strip("/") else ""
+        if first_segment in self.tokens:
+            scope["path"] = "/" + "/".join(path.strip("/").split("/")[1:])
+            await self.app(scope, receive, send)
+            return
+
         body = json.dumps({"error": "Unauthorized"}).encode()
         await send({"type": "http.response.start", "status": 401, "headers": [(b"content-type", b"application/json")]})
         await send({"type": "http.response.body", "body": body})
@@ -257,7 +263,7 @@ _auth_tokens: list[str] | None = None
 if _raw_tokens:
     _auth_tokens = [t.strip() for t in _raw_tokens.split(",") if t.strip()]
 
-app = _CORSMiddleware(
+_cors_auth_app = _CORSMiddleware(
     _AuthMiddleware(
         mcp.streamable_http_app(),
         _auth_tokens,
@@ -265,11 +271,24 @@ app = _CORSMiddleware(
 )
 
 
+async def app(scope, receive, send):
+    if scope["type"] == "http":
+        path = scope.get("path", "")
+        if scope["method"] == "POST":
+            if path.rstrip("/") == "":
+                scope["path"] = "/mcp"
+            elif path != "/mcp" and path.rstrip("/") == "/mcp":
+                scope["path"] = "/mcp"
+    await _cors_auth_app(scope, receive, send)
+
+
 def main() -> None:
     uvicorn.run(
         app,
         host=os.environ.get("HOST", "0.0.0.0"),
         port=int(os.environ.get("PORT", "8000")),
+        forwarded_allow_ips="*",
+        proxy_headers=True,
     )
 
 
