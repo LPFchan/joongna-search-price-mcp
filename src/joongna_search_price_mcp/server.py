@@ -7,7 +7,7 @@ import os
 from typing import Annotated
 from urllib.parse import parse_qs
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server import CacheHint, MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import Field
 from starlette.responses import JSONResponse
@@ -34,7 +34,7 @@ class _CORSMiddleware:
         raw = os.environ.get("ALLOWED_ORIGINS", os.environ.get("ALLOWED_ORIGIN", "https://chat.lost.plus"))
         self.allowed_origins = [o.strip() for o in raw.split(",") if o.strip()]
         self.cors_methods = b"GET, POST, DELETE, OPTIONS"
-        self.cors_allow_headers = b"authorization, content-type, accept, mcp-session-id, mcp-protocol-version, last-event-id, x-api-key"
+        self.cors_allow_headers = b"authorization, content-type, accept, mcp-session-id, mcp-protocol-version, mcp-method, mcp-name, mcp-param-*, last-event-id, x-api-key"
         self.cors_expose_headers = b"mcp-session-id, mcp-protocol-version, content-type"
 
     def _echo_origin(self, origin: str | None) -> str | None:
@@ -128,7 +128,7 @@ class _AuthMiddleware:
 
 
 @contextlib.asynccontextmanager
-async def mcp_lifespan(_: FastMCP):
+async def mcp_lifespan(_: MCPServer):
     global _service
 
     client = JoongnaClient(
@@ -149,15 +149,14 @@ async def mcp_lifespan(_: FastMCP):
         _service = None
 
 
-mcp = FastMCP(
+mcp = MCPServer(
     "joongna-search-price",
-    host=os.environ.get("HOST", "0.0.0.0"),
-    port=int(os.environ.get("PORT", "8000")),
-    streamable_http_path="/mcp",
-    json_response=True,
-    stateless_http=True,
+    version="0.1.0",
     lifespan=mcp_lifespan,
-    transport_security=_build_transport_security(),
+    cache_hints={
+        "server/discover": CacheHint(ttl_ms=300_000, scope="public"),
+        "tools/list": CacheHint(ttl_ms=300_000, scope="private"),
+    },
 )
 
 
@@ -265,7 +264,13 @@ if _raw_tokens:
 
 _cors_auth_app = _CORSMiddleware(
     _AuthMiddleware(
-        mcp.streamable_http_app(),
+        mcp.streamable_http_app(
+            streamable_http_path="/mcp",
+            json_response=True,
+            stateless_http=True,
+            host=os.environ.get("HOST", "0.0.0.0"),
+            transport_security=_build_transport_security(),
+        ),
         _auth_tokens,
     )
 )
