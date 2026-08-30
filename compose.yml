@@ -1,6 +1,7 @@
 services:
   joongna-search-price-mcp:
     build: .
+    restart: unless-stopped
     ports:
       - "127.0.0.1:8000:8000"
     environment:
@@ -9,4 +10,3 @@ services:
       JOONGNA_CACHE_TTL_SECONDS: 300
       JOONGNA_PUBLIC_BASE_URL: https://joongna.lost.plus
       ALLOWED_ORIGINS: https://*.lost.plus
-      JOONGNA_AUTH_TOKEN: ${JOONGNA_AUTH_TOKEN:-}
