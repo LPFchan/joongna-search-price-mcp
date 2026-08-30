@@ -11,6 +11,7 @@ from joongna_search_price_mcp.models import (
     JoongnaSearchKeywordResult,
     JoongnaSearchPriceResult,
     Listing,
+    ListingDetails,
     PriceHistoryDataset,
     PriceSummary,
     SearchMetadata,
@@ -196,12 +197,15 @@ def _build_listing(item: dict) -> Listing:
     else:
         listing_url = f"https://web.joongna.com/product/{sequence}"
 
+    thumbnail_url = item.get("url") or None
+
     return Listing(
         sequence=sequence,
         title=html_lib.unescape(str(item.get("title") or "")),
         price_krw=int(item.get("price") or 0),
         listing_url=listing_url,
-        thumbnail_url=item.get("url") or None,
+        thumbnail_url=thumbnail_url,
+        image_urls=[thumbnail_url] if thumbnail_url else [],
         sorted_at=item.get("sortDate") or None,
         location_name=item.get("mainLocationName") or None,
         parcel_fee_krw=int(item["parcelFee"]) if item.get("parcelFee") is not None else None,
@@ -211,6 +215,33 @@ def _build_listing(item: dict) -> Listing:
         certified_seller=bool(item["certifySellerFlag"]) if item.get("certifySellerFlag") is not None else None,
         state=int(item["state"]) if item.get("state") is not None else None,
     )
+
+
+def parse_product_detail(payload: dict) -> ListingDetails:
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        raise JoongnaParseError("Joongna product response did not contain product data")
+
+    raw_description = data.get("productDescription")
+    description = str(raw_description) if raw_description is not None else None
+
+    image_urls: list[str] = []
+    seen_urls: set[str] = set()
+    for collection_name in ("media", "descriptionMedia"):
+        media_items = data.get(collection_name) or []
+        if not isinstance(media_items, list):
+            continue
+        for media in media_items:
+            if not isinstance(media, dict):
+                continue
+            if media.get("mediaType") not in (None, 0):
+                continue
+            image_url = media.get("originUrl") or media.get("mediaUrl")
+            if isinstance(image_url, str) and image_url and image_url not in seen_urls:
+                seen_urls.add(image_url)
+                image_urls.append(image_url)
+
+    return ListingDetails(description=description, image_urls=image_urls)
 
 
 def _build_metadata(data: dict) -> SearchMetadata | None:

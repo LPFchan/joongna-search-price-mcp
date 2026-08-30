@@ -133,6 +133,10 @@ async def mcp_lifespan(_: MCPServer):
 
     client = JoongnaClient(
         base_url=os.environ.get("JOONGNA_BASE_URL", "https://web.joongna.com"),
+        product_api_base_url=os.environ.get(
+            "JOONGNA_PRODUCT_API_BASE_URL",
+            "https://product-api.joongna.com",
+        ),
         timeout_seconds=float(os.environ.get("JOONGNA_TIMEOUT_SECONDS", "20")),
         user_agent=os.environ.get("JOONGNA_USER_AGENT", DEFAULT_USER_AGENT),
     )
@@ -182,7 +186,7 @@ async def joongna_search_price(
         Field(default=False, description="Bypass the in-memory cache for this request"),
     ] = False,
 ) -> JoongnaSearchPriceResult:
-    """Query Joongna's used-market search-price page and return structured price data."""
+    """Return Joongna price data and listings with descriptions and product images."""
     service = _require_service()
     return await service.search(
         query=query,
@@ -214,7 +218,7 @@ async def joongna_search_keyword(
         Field(default=False, description="Bypass the in-memory cache for this request"),
     ] = False,
 ) -> JoongnaSearchKeywordResult:
-    """Search Joongna for product listings, including sold-out items, and return listing data."""
+    """Return Joongna listings, including sold-out items, descriptions, and product images."""
     service = _require_service()
     return await service.search_keyword(
         query=query,

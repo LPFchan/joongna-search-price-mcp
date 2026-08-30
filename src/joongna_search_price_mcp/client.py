@@ -20,10 +20,12 @@ class JoongnaClient:
         self,
         *,
         base_url: str = "https://web.joongna.com",
+        product_api_base_url: str = "https://product-api.joongna.com",
         timeout_seconds: float = 20.0,
         user_agent: str | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
+        self._product_api_base_url = product_api_base_url.rstrip("/")
         self._headers = {
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
             "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
@@ -69,6 +71,34 @@ class JoongnaClient:
             raise JoongnaFetchError("Joongna returned a suspected anti-bot page")
 
         return url, body
+
+    async def fetch_product_detail(self, sequence: int) -> dict:
+        url = f"{self._product_api_base_url}/basic/{sequence}"
+        try:
+            response = await self._http.get(
+                url,
+                params={"increaseViewCount": "false"},
+                headers={"Accept": "application/json"},
+            )
+        except httpx.HTTPError as exc:
+            raise JoongnaFetchError(f"Could not fetch Joongna product {sequence}") from exc
+
+        if response.status_code != 200:
+            raise JoongnaFetchError(f"Joongna returned HTTP {response.status_code} for {url}")
+
+        content_type = response.headers.get("content-type", "")
+        if "application/json" not in content_type:
+            raise JoongnaFetchError(
+                f"Joongna returned unexpected content type {content_type!r} for {url}"
+            )
+
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise JoongnaFetchError(f"Joongna returned invalid JSON for {url}") from exc
+        if not isinstance(payload, dict):
+            raise JoongnaFetchError(f"Joongna returned an invalid product response for {url}")
+        return payload
 
     async def fetch_search_page(self, search_word: str) -> tuple[str, str]:
         if not search_word.strip():

@@ -36,6 +36,14 @@ class Listing(BaseModel):
     price_krw: int
     listing_url: str
     thumbnail_url: str | None = None
+    description: str | None = Field(
+        default=None,
+        description="Seller-provided listing description",
+    )
+    image_urls: list[str] = Field(
+        default_factory=list,
+        description="Full-size product image URLs in display order",
+    )
     sorted_at: str | None = None
     location_name: str | None = None
     parcel_fee_krw: int | None = None
@@ -44,6 +52,13 @@ class Listing(BaseModel):
     pickup_badge: bool | None = None
     certified_seller: bool | None = None
     state: int | None = None
+
+
+class ListingDetails(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    description: str | None = None
+    image_urls: list[str] = Field(default_factory=list)
 
 
 class SearchMetadata(BaseModel):

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from joongna_search_price_mcp.parser import parse_search_price_page
+from joongna_search_price_mcp.parser import parse_product_detail, parse_search_price_page
 
 
 def test_parse_search_price_page_extracts_summary_history_and_listings() -> None:
@@ -125,7 +125,47 @@ def test_parse_search_price_page_extracts_summary_history_and_listings() -> None
 
     assert result.available_listings[0].listing_url == "https://web.joongna.com/product/228498566"
     assert result.available_listings[0].thumbnail_url == "https://img2.joongna.com/media/original/iphone13mini.jpg"
+    assert result.available_listings[0].image_urls == [
+        "https://img2.joongna.com/media/original/iphone13mini.jpg"
+    ]
     assert result.available_listings[0].title == "아이폰13미니 128 그린 S급 풀박스"
+
+
+def test_parse_product_detail_extracts_description_and_ordered_images() -> None:
+    result = parse_product_detail(
+        {
+            "data": {
+                "productDescription": "판매자가 작성한 설명\n두 번째 줄",
+                "media": [
+                    {
+                        "mediaType": 0,
+                        "originUrl": "https://img2.joongna.com/first.jpg",
+                        "mediaUrl": "https://img2.joongna.com/first-watermarked.jpg",
+                    },
+                    {
+                        "mediaType": 1,
+                        "originUrl": "https://img2.joongna.com/video.mp4",
+                    },
+                ],
+                "descriptionMedia": [
+                    {
+                        "mediaType": 0,
+                        "originUrl": "https://img2.joongna.com/second.jpg",
+                    },
+                    {
+                        "mediaType": 0,
+                        "originUrl": "https://img2.joongna.com/first.jpg",
+                    },
+                ],
+            }
+        }
+    )
+
+    assert result.description == "판매자가 작성한 설명\n두 번째 줄"
+    assert result.image_urls == [
+        "https://img2.joongna.com/first.jpg",
+        "https://img2.joongna.com/second.jpg",
+    ]
 
 
 def _next_chunk(payload_obj: dict) -> str:
